@@ -1,4 +1,4 @@
-// 1. Define your list of permitted domains
+// 1. Define list of permitted domains
 const allowedOrigins = [
   'https://sfcma.squarespace.com',
   'https://sfcivicmusic.org',
