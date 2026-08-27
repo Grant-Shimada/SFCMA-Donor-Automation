@@ -102,7 +102,7 @@
 <!-- CACHING & RENDERING PIPELINE -->
 <script>
   document.addEventListener("DOMContentLoaded", async () => {
-    // 1. Configure your production Cloudflare Worker URL
+    // 1. Configure production Cloudflare Worker URL
     const CLOUDFLARE_URL = "https://sfcma-donors-api.grantshimada.workers.dev/";
     const URL_SLUG = window.location.pathname.split("/").filter(Boolean).pop().trim() || "";
     const TITLE = URL_SLUG.replace("donor-recognition-", "");
@@ -167,7 +167,7 @@
         icon.classList.remove("animate-pulse"); // Stop the loading animation loop
         card.classList.add("has-error"); // Apply the error CSS theme variations
         
-        // Inject your custom trouble-loading terminology
+        // Inject custom trouble-loading terminology
         title.textContent = "We are currently having trouble loading donors.";
         desc.textContent = "We encountered an unexpected error when trying to connect to the server. Please try again later.";
       }
