@@ -1,0 +1,226 @@
+<!-- VISUAL CONTAINER -->
+<div id="donor-wall-container">
+  <div id="donor-status-card" class="donor-loading-card">
+    <p class="status-icon animate-pulse">🎼</p>
+    <h3 id="status-title">Loading Our Generous Supporters...</h3>
+    <p id="status-desc">We are currently gathering the latest entries from our donor database. Thank you for your patience and for supporting San Francisco Civic Music.</p>
+  </div>
+</div>
+
+<!-- RESPONSIVE LAYOUT STYLING -->
+<style>
+  /* Status/Loading/Error Card Container */
+  .donor-loading-card {
+    text-align: center;
+    max-width: 90%;
+    margin: 4rem auto;
+    padding: 2.5rem;
+    border: 1px solid #e5e5e5;
+    border-radius: 8px;
+    background-color: #fafafa;
+    font-family: inherit;
+    transition: all 0.3s ease;
+  }
+  .status-icon {
+    font-size: 10rem;
+    margin-bottom: 1rem;
+    margin-top: 0;
+  }
+  .donor-loading-card h3 {
+    font-size: 1.4rem;
+    margin-bottom: 1rem;
+    font-weight: 600;
+    color: #222;
+    line-height: 1.4;
+  }
+  .donor-loading-card p {
+    font-size: 1rem;
+    line-height: 1.6;
+    color: #555;
+    margin-bottom: 0;
+  }
+  
+  /* Error State modifier classes */
+  .donor-loading-card.has-error h3 {
+    color: #cc0000; /* Distinct red color specifically for actual failures */
+  }
+
+  /* Gentle pulsing animation for the musical note while data loads */
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  .animate-pulse {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  
+  /* Structural Grid Styles for when Live Data populates */
+  .donor-tier-section {
+    margin-bottom: 3.5rem;
+  }
+  .donor-tier-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    border-bottom: 2px solid #222;
+    padding-bottom: 0.5rem;
+    margin-bottom: 1.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .donor-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 0.85rem;
+  }
+  .donor-item {
+    font-size: 1.1rem;
+    line-height: 1.4;
+  }
+  .title-card {
+    font-size: 2rem;
+    font-weight: 800;
+    margin-bottom: 2.5rem;
+    letter-spacing: 0.05em;
+    text-align: center;
+  }
+  .statement {
+    font-size: 1.2rem;
+    letter-spacing: 0.05em;
+    margin-bottom: 2rem;
+  }
+  .last-updated {
+    font-size: 1rem;
+    letter-spacing: 0.05em;
+    margin-bottom: 1.5rem;
+    font-style: italic;
+  }
+</style>
+
+<!-- CACHING & RENDERING PIPELINE -->
+<script>
+  document.addEventListener("DOMContentLoaded", async () => {
+    // 1. Configure your production Cloudflare Worker URL
+    const CLOUDFLARE_URL = "https://sfcma-donors-api.grantshimada.workers.dev/";
+    const URL_SLUG = window.location.pathname.split("/").filter(Boolean).pop().trim() || "";
+    const TITLE = URL_SLUG.replace("donor-recognition-", "");
+    const container = document.getElementById("donor-wall-container");
+    
+    const CACHE_KEY = `sfcma_donor_data_${URL_SLUG}`;
+    const CACHE_TIME_KEY = `sfcma_donor_timestamp_${URL_SLUG}`;
+
+    // Dynamic UI painting engine
+    function renderDonorWall(data, date, title) {
+      container.innerHTML = ""; // Instantly wipes out the loading card completely
+      
+      const titleCard = document.createElement("h1");
+      titleCard.className = "title-card";
+      titleCard.textContent = `${title} Season`;
+      container.appendChild(titleCard);
+
+      const statement = document.createElement("p");
+      statement.className = "statement";
+      statement.textContent = "The San Francisco Civic Music Association wishes to recognize the following individuals and corporations for their generous financial support.";
+      container.appendChild(statement);
+      
+      const lastUpdated = document.createElement("p");
+      lastUpdated.className = "last-updated";
+      lastUpdated.textContent = `Last Updated: ${date}`;
+      container.appendChild(lastUpdated);
+      
+      for (const [tierName, donorArray] of Object.entries(data)) {
+        if (donorArray.length === 0) continue;
+
+        const tierSection = document.createElement("div");
+        tierSection.className = "donor-tier-section";
+        
+        const heading = document.createElement("h3");
+        heading.className = "donor-tier-title";
+        heading.textContent = tierName;
+        tierSection.appendChild(heading);
+
+        const list = document.createElement("ul");
+        list.className = "donor-list";
+        
+        donorArray.forEach(donorName => {
+          const item = document.createElement("li");
+          item.className = "donor-item";
+          item.textContent = donorName;
+          list.appendChild(item);
+        });
+
+        tierSection.appendChild(list);
+        container.appendChild(tierSection);
+      }
+    }
+
+    // Handles transforming the polite loading card into an error notice
+    function displayErrorState() {
+      const card = document.getElementById("donor-status-card");
+      const icon = card.querySelector(".status-icon");
+      const title = document.getElementById("status-title");
+      const desc = document.getElementById("status-desc");
+
+      if (card && title && desc) {
+        icon.classList.remove("animate-pulse"); // Stop the loading animation loop
+        card.classList.add("has-error"); // Apply the error CSS theme variations
+        
+        // Inject your custom trouble-loading terminology
+        title.textContent = "We are currently having trouble loading donors.";
+        desc.textContent = "We encountered an unexpected error when trying to connect to the server. Please try again later.";
+      }
+    }
+
+    // Network Fetch Routine (GET)
+    async function fetchFullPayload() {
+      try {
+        const response = await fetch(CLOUDFLARE_URL + URL_SLUG, { method: "GET" })
+        if (!response.ok) throw new Error("Full database pull failed");
+      
+        const remoteTime = response.headers.get("Last-Modified");
+        if (remoteTime) {
+          localStorage.setItem(CACHE_TIME_KEY, remoteTime);
+        }
+      
+        const data = await response.json();
+        localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+        renderDonorWall(data, new Date(remoteTime).toLocaleDateString(), TITLE); // Re-renders the display cleanly with the actual lists
+        
+      } catch(err) {
+        console.error("Network Fetch Error:", err);
+        // ABSOLUTE FALLBACK TRIGGER: If GET fails and we have NO cache, morph card into error state
+        displayErrorState();
+      }
+    }
+
+    /* -------------------------------------------------------------
+       THE INITIALIZATION LOOP
+       ------------------------------------------------------------- */
+    const localData = localStorage.getItem(CACHE_KEY);
+    const localTimestamp = localStorage.getItem(CACHE_TIME_KEY);
+
+    if (!localData || !localTimestamp) {
+      // SCENARIO A: First-time visitor -> Starts with "Loading...", attempts network pull
+      fetchFullPayload();
+    } else {
+      // SCENARIO B: Repeat visitor -> Overwrite standard loading card with local cache instantly (0ms lag)
+      renderDonorWall(JSON.parse(localData), new Date(localTimestamp).toLocaleDateString(), TITLE);
+
+      // Quietly query the remote file age in the background
+      try {
+        const response = await fetch(CLOUDFLARE_URL + URL_SLUG, { method: "HEAD" });
+        const remoteTimestamp = response.headers.get("Last-Modified");
+
+        if (remoteTimestamp && remoteTimestamp !== localTimestamp) {
+          console.log("Updates found on Cloudflare. Updating data package...");
+          fetchFullPayload(); 
+        }
+      } catch(err) {
+        // SCENARIO C: Cloudflare is down -> Catch block suppresses error, leaves local cache active
+          console.warn("Cloudflare unreachable. Local browser storage backup maintained.", err);
+      }
+    }
+  });
+</script>
